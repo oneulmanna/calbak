@@ -1,0 +1,22 @@
+{
+  "name": "캘박 - 우리오늘만나?",
+  "short_name": "캘박",
+  "description": "카카오 친구들과 가능한 날짜를 골라 가장 잘 맞는 날을 찾아보세요.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fff8f1",
+  "theme_color": "#fff8f1",
+  "icons": [
+    {
+      "src": "./assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fff8f1">
+  <title>결과 · 캘박</title>
+  <link rel="icon" href="./assets/icon.svg">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./assets/style.css">
+</head>
+<body>
+  <main class="page">
+    <section class="sheet">
+      <div class="sheet-inner sheet-content">
+        <header class="page-header">
+          <a class="back-button" id="back-room" href="./index.html" aria-label="뒤로">←</a>
+          <span class="page-badge">RESULT</span>
+        </header>
+
+        <div class="title-block">
+          <p class="eyebrow">BEST DAYS</p>
+          <h1 class="page-title">우리오늘만나?</h1>
+          <p class="subtitle" id="room-title">결과를 불러오는 중입니다.</p>
+          <p class="subtitle" id="participant-summary"></p>
+        </div>
+
+        <div id="result-content"></div>
+
+        <div class="action-stack">
+          <a class="button primary" id="edit-button" href="#">내 선택 수정하기</a>
+          <button class="button kakao" id="share-button" type="button">카카오톡 공유</button>
+          <a class="button" href="./index.html">홈으로</a>
+        </div>
+
+        <footer class="footer">MADE BY <strong>KIM INHO</strong></footer>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./supabase-config.js"></script>
+  <script src="./assets/common.js"></script>
+  <script>
+    const {
+      qs, getCode, formatKoreanDate, showToast, configError,
+      getClient, requireUser, saveRoomHistory, shareRoom,
+      avatarMarkup, escapeHtml
+    } = App;
+
+    const code = getCode();
+    let room = null;
+
+    function calculateResults(participants) {
+      const map = new Map();
+      participants.forEach((person) => {
+        (person.selected_dates || []).forEach((date) => {
+          if (!map.has(date)) map.set(date, []);
+          map.get(date).push(person);
+        });
+      });
+
+      return [...map.entries()]
+        .map(([date, people]) => ({ date, people, count: people.length }))
+        .sort((a, b) => b.count - a.count || a.date.localeCompare(b.date));
+    }
+
+    function render(participants) {
+      const results = calculateResults(participants);
+      const total = participants.length;
+      qs("#participant-summary").textContent =
+        `현재 참여자 ${total}명 기준으로, 많이 겹치는 날짜부터 보여줍니다.`;
+
+      if (!results.length) {
+        qs("#result-content").innerHTML = `
+          <div class="empty-state">
+            아직 저장된 날짜가 없습니다.<br>친구들에게 링크를 공유해보세요.
+          </div>`;
+        return;
+      }
+
+      const best = results[0];
+      const list = results.map((item) => `
+        <article class="result-item">
+          <div class="result-line">
+            <div>
+              <span class="result-date">${formatKoreanDate(item.date, true)}</span>
+              ${item.count === total && total > 0 ? '<span class="count-badge">ALL</span>' : ""}
+            </div>
+            <span class="result-count">가능 ${item.count}명 / 전체 ${total}명</span>
+          </div>
+          <div class="participant-row">
+            ${item.people.map((person) => `
+              <span class="participant-pill">
+                ${avatarMarkup(person, true)}
+                ${escapeHtml(person.name)}
+              </span>
+            `).join("")}
+          </div>
+        </article>
+      `).join("");
+
+      qs("#result-content").innerHTML = `
+        <section class="result-summary">
+          <p class="eyebrow">BEST PICK</p>
+          <p class="best-date">${formatKoreanDate(best.date, true)}</p>
+          <p>가장 많이 겹치는 날짜입니다.<br>가능 ${best.count}명 / 전체 ${total}명</p>
+        </section>
+        <section class="result-list">${list}</section>
+      `;
+    }
+
+    async function boot() {
+      if (!code) {
+        showToast("잘못된 약속 링크입니다.", "error");
+        return;
+      }
+
+      try {
+        await requireUser(location.href);
+        const sb = getClient();
+
+        const { data: roomData, error: roomError } = await sb
+          .from("rooms")
+          .select("*")
+          .eq("code", code)
+          .single();
+
+        if (roomError) throw roomError;
+        room = roomData;
+        saveRoomHistory(room);
+
+        document.title = `결과 · ${room.title}`;
+        qs("#room-title").textContent = room.title;
+        qs("#edit-button").href = `./room.html?code=${encodeURIComponent(room.code)}`;
+        qs("#back-room").href = `./room.html?code=${encodeURIComponent(room.code)}`;
+
+        const { data: participants, error: participantsError } = await sb
+          .from("participants")
+          .select("*")
+          .eq("room_id", room.id)
+          .order("created_at", { ascending: true });
+
+        if (participantsError) throw participantsError;
+        render(participants || []);
+      } catch (error) {
+        if (error.message === "AUTH_REDIRECT") return;
+        if (!configError(error)) {
+          console.error(error);
+          showToast(error.message || "결과를 불러오지 못했습니다.", "error");
+        }
+      }
+    }
+
+    qs("#share-button").addEventListener("click", () => room && shareRoom(room, "result.html"));
+    boot();
+  </script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fff8f1">
+  <title>기존 약속 보기 · 캘박</title>
+  <link rel="icon" href="./assets/icon.svg">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./assets/style.css">
+</head>
+<body>
+  <main class="page">
+    <section class="sheet">
+      <div class="sheet-inner sheet-content">
+        <header class="page-header">
+          <a class="back-button" href="./index.html" aria-label="뒤로">←</a>
+          <span class="page-badge">MY ROOMS</span>
+        </header>
+
+        <div class="title-block">
+          <p class="eyebrow">RECENT ROOMS</p>
+          <h1 class="page-title">기존 약속 보기</h1>
+          <p class="subtitle">이 브라우저에서 만들었거나 들어갔던 약속방입니다.</p>
+        </div>
+
+        <div class="rooms-list" id="rooms-list"></div>
+
+        <a class="button primary" href="./create.html" style="margin-top:28px;">새 약속 만들기</a>
+        <footer class="footer">MADE BY <strong>KIM INHO</strong></footer>
+      </div>
+    </section>
+  </main>
+
+  <script src="./assets/common.js"></script>
+  <script>
+    const { qs, getRoomHistory, removeRoomHistory, formatCreatedAt, escapeHtml } = App;
+
+    function render() {
+      const rooms = getRoomHistory();
+      const container = qs("#rooms-list");
+
+      if (!rooms.length) {
+        container.innerHTML = `
+          <div class="empty-state">
+            아직 저장된 약속이 없습니다.<br>
+            공유 링크로 들어간 약속도 여기에 자동으로 표시됩니다.
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = rooms.map((room) => `
+        <div class="room-row">
+          <a class="room-card" href="./room.html?code=${encodeURIComponent(room.code)}">
+            <strong>${escapeHtml(room.title || "이름 없는 약속")}</strong>
+            <span>${formatCreatedAt(room.created_at || room.visited_at)}</span>
+          </a>
+          <button class="delete-room" type="button"
+            data-code="${escapeHtml(room.code)}" aria-label="목록에서 삭제">×</button>
+        </div>
+      `).join("");
+
+      container.querySelectorAll(".delete-room").forEach((button) => {
+        button.addEventListener("click", () => {
+          if (!confirm("이 브라우저의 목록에서만 삭제할까요? 약속방 자체는 삭제되지 않습니다.")) return;
+          removeRoomHistory(button.dataset.code);
+          render();
+        });
+      });
+    }
+
+    render();
+  </script>
+</body>
+</html>

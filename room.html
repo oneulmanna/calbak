@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fff8f1">
+  <title>날짜 고르기 · 캘박</title>
+  <link rel="icon" href="./assets/icon.svg">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./assets/style.css">
+</head>
+<body>
+  <main class="page">
+    <section class="sheet">
+      <div class="sheet-inner sheet-content">
+        <header class="page-header">
+          <a class="back-button" href="./index.html" aria-label="뒤로">←</a>
+          <span class="page-badge">ROOM</span>
+        </header>
+
+        <div class="title-block">
+          <p class="eyebrow">PICK YOUR DAYS</p>
+          <h1 class="page-title">우리오늘만나?</h1>
+          <p class="subtitle" id="room-title">약속 정보를 불러오는 중입니다.</p>
+        </div>
+
+        <p class="subtitle room-top-copy" id="room-memo"></p>
+
+        <div class="share-stack">
+          <input class="link-box" id="room-link" type="text" readonly aria-label="공유 링크">
+          <button class="button" id="copy-button" type="button">링크 복사</button>
+          <button class="button kakao" id="share-button" type="button">카카오톡 공유</button>
+        </div>
+
+        <form class="form" id="participant-form">
+          <div class="account-card" style="margin:0 0 24px;">
+            <div class="account-avatar" id="account-avatar">?</div>
+            <div class="account-copy">
+              <strong id="account-name">카카오 사용자</strong>
+              <span>카카오 이름과 프로필 사진으로 참여합니다.</span>
+            </div>
+          </div>
+
+          <div class="calendar-wrap">
+            <div class="calendar-nav">
+              <button class="month-button" id="prev-month" type="button" aria-label="이전 달">‹</button>
+              <h2 class="calendar-title" id="calendar-title"></h2>
+              <button class="month-button" id="next-month" type="button" aria-label="다음 달">›</button>
+            </div>
+            <div class="weekdays" aria-hidden="true">
+              <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+            </div>
+            <div class="calendar-grid" id="calendar-grid"></div>
+          </div>
+
+          <div class="info-card">
+            <strong>날짜를 선택해주세요.</strong>
+            <p>날짜 아래 작은 프로필은 그 날을 선택한 사람입니다.</p>
+          </div>
+
+          <div class="info-card">
+            <strong>내가 선택한 날짜</strong>
+            <p id="empty-selection">아직 선택한 날짜가 없습니다.</p>
+            <div class="selected-list" id="selected-list"></div>
+          </div>
+
+          <div class="action-stack">
+            <button class="button primary" id="save-button" type="submit">되는 날 저장하기</button>
+            <a class="button" id="result-button" href="#">결과 보기</a>
+          </div>
+        </form>
+
+        <footer class="footer">MADE BY <strong>KIM INHO</strong></footer>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./supabase-config.js"></script>
+  <script src="./assets/common.js"></script>
+  <script>
+    const {
+      qs, parseISO, dateToISO, formatKoreanDate, getCode, roomUrl,
+      showToast, setLoading, configError, getClient, requireUser, getProfile,
+      saveRoomHistory, copyText, shareRoom, avatarMarkup, escapeHtml
+    } = App;
+
+    const code = getCode();
+    const form = qs("#participant-form");
+    const grid = qs("#calendar-grid");
+    const saveButton = qs("#save-button");
+    const selectedDates = new Set();
+
+    let room = null;
+    let user = null;
+    let profile = { name: "카카오 사용자", avatar: "" };
+    let participants = [];
+    let currentMonth = null;
+
+    function firstMonthDate(value) {
+      const date = parseISO(value);
+      return new Date(date.getFullYear(), date.getMonth(), 1);
+    }
+
+    function monthKey(date) {
+      return date.getFullYear() * 12 + date.getMonth();
+    }
+
+    function dateParticipants(iso) {
+      return participants.filter((person) => (person.selected_dates || []).includes(iso));
+    }
+
+    function renderCalendar() {
+      if (!room || !currentMonth) return;
+
+      qs("#calendar-title").textContent =
+        `${currentMonth.getFullYear()}. ${String(currentMonth.getMonth() + 1).padStart(2, "0")}`;
+
+      const start = parseISO(room.start_date);
+      const end = parseISO(room.end_date);
+      const first = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+      const last = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+      const cells = [];
+
+      for (let i = 0; i < first.getDay(); i++) {
+        cells.push('<button class="day empty" type="button" disabled aria-hidden="true"></button>');
+      }
+
+      for (let day = 1; day <= last.getDate(); day++) {
+        const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+        const iso = dateToISO(date);
+        const disabled = date < start || date > end;
+        const people = dateParticipants(iso).slice(0, 4);
+
+        cells.push(`
+          <button class="day${selectedDates.has(iso) ? " selected" : ""}" type="button"
+            data-date="${iso}" ${disabled ? "disabled" : ""}
+            aria-pressed="${selectedDates.has(iso)}">
+            <span class="day-number">${day}</span>
+            <span class="day-people">
+              ${people.map((person) => avatarMarkup(person, true)).join("")}
+            </span>
+          </button>
+        `);
+      }
+
+      grid.innerHTML = cells.join("");
+
+      grid.querySelectorAll(".day[data-date]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const iso = button.dataset.date;
+          if (selectedDates.has(iso)) selectedDates.delete(iso);
+          else selectedDates.add(iso);
+          renderCalendar();
+          renderSelected();
+        });
+      });
+
+      const startMonth = monthKey(firstMonthDate(room.start_date));
+      const endMonth = monthKey(firstMonthDate(room.end_date));
+      qs("#prev-month").disabled = monthKey(currentMonth) <= startMonth;
+      qs("#next-month").disabled = monthKey(currentMonth) >= endMonth;
+    }
+
+    function renderSelected() {
+      const list = [...selectedDates].sort();
+      qs("#empty-selection").hidden = list.length > 0;
+      qs("#selected-list").innerHTML = list
+        .map((date) => `<span class="date-chip">${formatKoreanDate(date, true)}</span>`)
+        .join("");
+    }
+
+    async function loadParticipants() {
+      if (!room) return;
+      const sb = getClient();
+      const { data, error } = await sb
+        .from("participants")
+        .select("*")
+        .eq("room_id", room.id)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      participants = data || [];
+      renderCalendar();
+    }
+
+    async function boot() {
+      if (!code) {
+        showToast("잘못된 약속 링크입니다.", "error");
+        return;
+      }
+
+      try {
+        user = await requireUser(location.href);
+        profile = getProfile(user);
+        qs("#account-name").textContent = profile.name;
+        qs("#account-avatar").innerHTML = profile.avatar
+          ? `<img src="${escapeHtml(profile.avatar)}" alt="">`
+          : escapeHtml(profile.name.slice(0, 1));
+
+        const sb = getClient();
+        const { data, error } = await sb
+          .from("rooms")
+          .select("*")
+          .eq("code", code)
+          .single();
+
+        if (error) throw error;
+        room = data;
+        currentMonth = firstMonthDate(room.start_date);
+        saveRoomHistory(room);
+
+        document.title = `${room.title} · 캘박`;
+        qs("#room-title").textContent = room.title;
+        qs("#room-memo").textContent = room.memo || "가능한 날짜를 모두 골라주세요.";
+        qs("#room-link").value = roomUrl(room.code);
+        qs("#result-button").href = `./result.html?code=${encodeURIComponent(room.code)}`;
+
+        const { data: mine, error: mineError } = await sb
+          .from("participants")
+          .select("*")
+          .eq("room_id", room.id)
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (mineError) throw mineError;
+        if (mine) {
+          (mine.selected_dates || []).forEach((date) => selectedDates.add(date));
+        }
+
+        await loadParticipants();
+        renderSelected();
+      } catch (error) {
+        if (error.message === "AUTH_REDIRECT") return;
+        if (!configError(error)) {
+          console.error(error);
+          showToast(error.code === "PGRST116"
+            ? "존재하지 않는 약속입니다."
+            : (error.message || "약속을 불러오지 못했습니다."), "error");
+        }
+      }
+    }
+
+    qs("#prev-month").addEventListener("click", () => {
+      currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+      renderCalendar();
+    });
+
+    qs("#next-month").addEventListener("click", () => {
+      currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+      renderCalendar();
+    });
+
+    qs("#copy-button").addEventListener("click", () => copyText(qs("#room-link").value));
+    qs("#share-button").addEventListener("click", () => room && shareRoom(room));
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!room || !user) return;
+
+      if (!selectedDates.size) {
+        showToast("가능한 날짜를 하나 이상 골라주세요.", "error");
+        return;
+      }
+
+      setLoading(saveButton, true, "저장하는 중");
+      try {
+        const sb = getClient();
+        const payload = {
+          room_id: room.id,
+          user_id: user.id,
+          name: profile.name,
+          avatar: profile.avatar || null,
+          selected_dates: [...selectedDates].sort(),
+          updated_at: new Date().toISOString()
+        };
+
+        const { error } = await sb
+          .from("participants")
+          .upsert(payload, { onConflict: "room_id,user_id" });
+
+        if (error) throw error;
+        await loadParticipants();
+        showToast("선택한 날짜를 저장했습니다.");
+      } catch (error) {
+        console.error(error);
+        showToast(error.message || "날짜를 저장하지 못했습니다.", "error");
+      } finally {
+        setLoading(saveButton, false);
+      }
+    });
+
+    boot();
+
+    setInterval(() => {
+      if (room && document.visibilityState === "visible") {
+        loadParticipants().catch(console.error);
+      }
+    }, 12000);
+  </script>
+</body>
+</html>

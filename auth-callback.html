@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fff8f1">
+  <title>카카오 로그인 중 · 캘박</title>
+  <link rel="icon" href="./assets/icon.svg">
+  <link rel="stylesheet" href="./assets/style.css">
+</head>
+<body>
+  <main class="auth-loading">
+    <div>
+      <span class="spinner" aria-hidden="true"></span>
+      <p style="margin-top:16px;">카카오 로그인을 완료하고 있습니다.</p>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./supabase-config.js"></script>
+  <script src="./assets/common.js"></script>
+  <script>
+    (async () => {
+      const home = App.pageUrl("index.html");
+      try {
+        const sb = App.getClient();
+        const params = new URLSearchParams(location.search);
+        const code = params.get("code");
+        const authError = params.get("error_description") || params.get("error");
+
+        if (authError) throw new Error(authError);
+        if (!code) throw new Error("로그인 인증 코드가 없습니다.");
+
+        const { error } = await sb.auth.exchangeCodeForSession(code);
+        if (error) throw error;
+
+        const destination = App.safeReturnUrl(
+          localStorage.getItem("calbak-auth-return") || home
+        );
+        localStorage.removeItem("calbak-auth-return");
+        location.replace(destination);
+      } catch (error) {
+        console.error(error);
+        document.body.innerHTML = `
+          <main class="auth-loading">
+            <div>
+              <p>카카오 로그인에 실패했습니다.</p>
+              <p style="font-size:13px;">${App.escapeHtml(error.message || "다시 시도해주세요.")}</p>
+              <a class="button primary" href="./index.html">홈으로 돌아가기</a>
+            </div>
+          </main>`;
+      }
+    })();
+  </script>
+</body>
+</html>

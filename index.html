@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fff8f1">
+  <title>캘박 · 우리오늘만나?</title>
+  <meta name="description" content="카카오 친구들과 가능한 날짜를 골라 가장 잘 맞는 날을 찾아보세요.">
+  <link rel="icon" href="./assets/icon.svg">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./assets/style.css">
+</head>
+<body>
+  <main class="page">
+    <section class="sheet home-sheet">
+      <div class="sheet-inner">
+        <div class="home-main">
+          <div class="install-card">
+            <img src="./assets/icon.svg" alt="">
+            <div class="install-copy">
+              <strong>홈 화면에 추가</strong>
+              <span>앱처럼 바로 열 수 있어요.</span>
+            </div>
+            <button class="install-button" id="install-button" type="button">방법</button>
+          </div>
+
+          <div class="logo-card">
+            <img src="./assets/icon.svg" alt="캘박 로고">
+          </div>
+          <p class="eyebrow">CUTE SCHEDULE APP</p>
+          <h1 class="home-title">우리오늘만나?</h1>
+          <p class="subtitle">되는 날만 콕콕 찍고, 제일 잘 맞는 날을 귀엽게 찾아보세요.</p>
+
+          <div class="account-card" id="account-card" hidden>
+            <div class="account-avatar" id="account-avatar">?</div>
+            <div class="account-copy">
+              <strong id="account-name">카카오 사용자</strong>
+              <span>카카오 계정으로 로그인되어 있습니다.</span>
+            </div>
+            <button class="button small ghost" id="logout-button" type="button">로그아웃</button>
+          </div>
+
+          <div class="home-actions">
+            <button class="button kakao" id="login-button" type="button">카카오로 시작하기</button>
+            <a class="button primary" id="create-link" href="./create.html">약속 만들기</a>
+            <a class="button" href="./rooms.html">기존 약속 보기</a>
+          </div>
+        </div>
+
+        <footer class="footer">MADE BY <strong>KIM INHO</strong></footer>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./supabase-config.js"></script>
+  <script src="./assets/common.js"></script>
+  <script>
+    const {
+      getUser, getProfile, signInWithKakao, signOut,
+      showToast, configError, escapeHtml
+    } = App;
+
+    async function renderAccount() {
+      try {
+        const user = await getUser();
+        const loginButton = document.getElementById("login-button");
+        const accountCard = document.getElementById("account-card");
+
+        if (!user) {
+          loginButton.hidden = false;
+          accountCard.hidden = true;
+          return;
+        }
+
+        const profile = getProfile(user);
+        loginButton.hidden = true;
+        accountCard.hidden = false;
+        document.getElementById("account-name").textContent = profile.name;
+        document.getElementById("account-avatar").innerHTML = profile.avatar
+          ? `<img src="${escapeHtml(profile.avatar)}" alt="">`
+          : escapeHtml(profile.name.slice(0, 1));
+      } catch (error) {
+        if (!configError(error)) console.error(error);
+      }
+    }
+
+    document.getElementById("login-button").addEventListener("click", async () => {
+      try {
+        await signInWithKakao(location.href);
+      } catch (error) {
+        if (!configError(error)) {
+          showToast(error.message || "카카오 로그인을 시작하지 못했습니다.", "error");
+        }
+      }
+    });
+
+    document.getElementById("logout-button").addEventListener("click", async () => {
+      try {
+        await signOut();
+        location.reload();
+      } catch (error) {
+        showToast(error.message || "로그아웃하지 못했습니다.", "error");
+      }
+    });
+
+    document.getElementById("create-link").addEventListener("click", async (event) => {
+      const user = await getUser().catch(() => null);
+      if (user) return;
+      event.preventDefault();
+      await signInWithKakao(new URL("./create.html", location.href).href);
+    });
+
+    renderAccount();
+
+    let deferredPrompt = null;
+    const installButton = document.getElementById("install-button");
+
+    window.addEventListener("beforeinstallprompt", (event) => {
+      event.preventDefault();
+      deferredPrompt = event;
+      installButton.textContent = "설치";
+    });
+
+    installButton.addEventListener("click", async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        installButton.textContent = "방법";
+        return;
+      }
+
+      const isiOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      alert(isiOS
+        ? "Safari 하단의 공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택해주세요."
+        : "브라우저 메뉴에서 ‘앱 설치’ 또는 ‘홈 화면에 추가’를 선택해주세요.");
+    });
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
+    }
+  </script>
+</body>
+</html>
