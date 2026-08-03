@@ -290,14 +290,22 @@
     }
   }
 
-  async function shareRoom(room, page = "room.html") {
-    const url = roomUrl(room.code, page);
-    const shareData = {
-      title: `캘박 · ${room.title}`,
-      text: `${room.title} 가능한 날짜를 골라주세요.`,
-      url
-    };
+  function initializeKakaoShare() {
+    if (!window.Kakao) {
+      throw new Error("카카오 공유 모듈을 불러오지 못했습니다.");
+    }
 
+    const key = config.KAKAO_JAVASCRIPT_KEY;
+    if (!key) {
+      throw new Error("카카오 JavaScript 키가 없습니다.");
+    }
+
+    if (!window.Kakao.isInitialized()) {
+      window.Kakao.init(key);
+    }
+  }
+
+  async function fallbackShare(shareData) {
     if (navigator.share) {
       try {
         await navigator.share(shareData);
@@ -306,7 +314,54 @@
         if (error.name === "AbortError") return;
       }
     }
-    await copyText(url);
+    await copyText(shareData.url);
+  }
+
+  async function shareRoom(room, page = "room.html") {
+    const isResult = page === "result.html";
+    const url = roomUrl(room.code, page);
+    const imageUrl = new URL("./assets/kakao-share.png", location.href).href;
+
+    try {
+      initializeKakaoShare();
+
+      window.Kakao.Share.sendDefault({
+        objectType: "feed",
+        content: {
+          title: isResult ? `${room.title} 결과` : "우리오늘만나?",
+          description: isResult
+            ? "가장 많이 겹치는 날짜를 확인해보세요!"
+            : `"${room.title}" 약속방에 들어와서 되는 날을 선택해주세요!`,
+          imageUrl,
+          imageWidth: 800,
+          imageHeight: 800,
+          link: {
+            mobileWebUrl: url,
+            webUrl: url
+          }
+        },
+        buttons: [
+          {
+            title: isResult ? "결과 확인하기" : "약속 참여하기",
+            link: {
+              mobileWebUrl: url,
+              webUrl: url
+            }
+          }
+        ]
+      });
+      return;
+    } catch (error) {
+      console.error("Kakao Share failed:", error);
+    }
+
+    await fallbackShare({
+      title: `캘박 · ${room.title}`,
+      text: isResult
+        ? `${room.title} 결과를 확인해보세요.`
+        : `${room.title} 가능한 날짜를 골라주세요.`,
+      url
+    });
   }
 
   window.App = {

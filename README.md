@@ -30,3 +30,10 @@
 - 현재 들어 있는 `sb_publishable_` 키는 브라우저용 공개 키입니다.
 - 카카오 개발자 설정의 리다이렉트 URI는 Supabase 콜백 주소여야 합니다.
 - Supabase URL Configuration에는 GitHub Pages 주소와 `auth-callback.html` 주소가 등록되어 있어야 합니다.
+
+
+## 카카오톡 공유 카드 적용
+
+- 카카오 JavaScript SDK 2.8.1 적용
+- 약속방의 `카카오톡 공유` 버튼을 누르면 이미지·제목·설명·참여 버튼이 포함된 피드 카드가 열립니다.
+- 웹 도메인 및 JavaScript SDK 도메인: `https://oneulmanna.github.io`

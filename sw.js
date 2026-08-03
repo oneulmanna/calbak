@@ -1,4 +1,4 @@
-const CACHE_NAME = "calbak-v3";
+const CACHE_NAME = "calbak-v4";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -12,6 +12,7 @@ const APP_SHELL = [
   "./assets/icon.svg",
   "./assets/icon-192.png",
   "./assets/icon-512.png",
+  "./assets/kakao-share.png",
   "./manifest.webmanifest"
 ];
 
